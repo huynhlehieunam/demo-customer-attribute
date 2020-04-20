@@ -5,6 +5,7 @@ use Magento\Customer\Model\Customer;
 use Magento\Eav\Model\Config;
 use Magento\Eav\Setup\EavSetup;
 use Magento\Eav\Setup\EavSetupFactory;
+use Magento\Framework\Exception\AlreadyExistsException;
 use Magento\Framework\Setup\ModuleContextInterface;
 use Magento\Framework\Setup\ModuleDataSetupInterface;
 use Magento\Framework\Setup\UpgradeDataInterface;
@@ -21,20 +22,28 @@ class UpgradeData implements UpgradeDataInterface
      * @var LoggerInterface
      */
     private $logger;
+    /**
+     * @var \Magento\Customer\Model\ResourceModel\Attribute
+     */
+    private $attributeResource;
 
     public function __construct(
         EavSetupFactory $eavSetupFactory,
         Config $eavConfig,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        \Magento\Customer\Model\ResourceModel\Attribute $attributeResource
     ) {
         $this->eavSetupFactory = $eavSetupFactory;
         $this->eavConfig = $eavConfig;
         $this->logger = $logger;
+        $this->attributeResource = $attributeResource;
     }
 
     public function upgrade(ModuleDataSetupInterface $setup, ModuleContextInterface $context)
     {
+        echo "1";
         if (version_compare($context->getVersion(), '1.0.1', '<')) {
+            echo "2";
             /** @var EavSetup $eavSetup */
             $eavSetup = $this->eavSetupFactory->create(['setup' => $setup]);
             $eavSetup->addAttribute(
@@ -44,19 +53,33 @@ class UpgradeData implements UpgradeDataInterface
                     'type' => 'varchar',
                     'label' => 'Phone Number',
                     'input' => 'text',
-                    'required' => false,
-                    'visible' => true,
-                    'user_defined' => true,
+                    'required' => 1,
+                    'visible' => 1,
+                    'user_defined' => 1,
+                    'sort_order' => 999,
                     'position' => 999,
                     'system' => 0
                 ]
             );
+
+
+            $attributeSetId = $eavSetup->getDefaultAttributeSetId(Customer::ENTITY);
+            $attributeGroupId = $eavSetup->getDefaultAttributeGroupId(Customer::ENTITY);
+
             $attribute = $this->eavConfig->getAttribute(Customer::ENTITY, 'phone_number');
-            // used_in_forms are of these types you can use forms key according to your need ['adminhtml_checkout','adminhtml_customer','adminhtml_customer_address','customer_account_edit','customer_address_edit','customer_register_address', 'customer_account_create']
-            $attribute->setData('used_in_forms', ['adminhtml_customer', 'customer_account_create']);
+            $attribute->setData('attribute_set_id', $attributeSetId);
+            $attribute->setData('attribute_group_id', $attributeGroupId);
+
+            $attribute->setData('used_in_forms', [
+                'adminhtml_customer',
+                'customer_account_create',
+                'customer_account_edit'
+            ]);
 
             try {
-                $attribute->save();
+                $this->attributeResource->save($attribute);
+            } catch (AlreadyExistsException $e) {
+                echo $e->getMessage();
             } catch (\Exception $e) {
                 echo $e->getMessage();
             }
